@@ -33,6 +33,10 @@ WindowManager::~WindowManager()
 bool WindowManager::init(int const width, int const height)
 {
 	glfwSetErrorCallback(error_callback);
+    
+    this->width = width;
+    this->height = height;
+    this->aspect = width / (float)height;
 
 	// Initialize glfw library
 	if (!glfwInit())
@@ -43,11 +47,11 @@ bool WindowManager::init(int const width, int const height)
 	//request the highest possible version of OGL - important for mac
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
 
 	// Create a windowed mode window and its OpenGL context.
-	windowHandle = glfwCreateWindow(width, height, "hello triangle", nullptr, nullptr);
+	windowHandle = glfwCreateWindow(width, height, "Awesome OpenGL Project", nullptr, nullptr);
 	if (! windowHandle)
 	{
 		glfwTerminate();
@@ -64,13 +68,14 @@ bool WindowManager::init(int const width, int const height)
 	}
 
 	std::cout << "OpenGL version: " << glGetString(GL_VERSION) << std::endl;
-	std::cout << "GLSL version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
-
+    std::cout << "GLSL version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+    
 	// Set vsync
 	glfwSwapInterval(1);
 
 	glfwSetKeyCallback(windowHandle, key_callback);
 	glfwSetMouseButtonCallback(windowHandle, mouse_callback);
+    glfwSetCursorPosCallback(windowHandle, mouse_move_callback);
 	glfwSetFramebufferSizeCallback(windowHandle, resize_callback);
 
 	return true;
@@ -94,6 +99,11 @@ GLFWwindow * WindowManager::getHandle()
 
 void WindowManager::key_callback(GLFWwindow * window, int key, int scancode, int action, int mods)
 {
+    // Press ESC to close window.
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, GL_TRUE);
+    }
+    
 	if (instance && instance->callbacks)
 	{
 		instance->callbacks->keyCallback(window, key, scancode, action, mods);
@@ -108,8 +118,24 @@ void WindowManager::mouse_callback(GLFWwindow * window, int button, int action, 
 	}
 }
 
+void WindowManager::mouse_move_callback(GLFWwindow *window, double xpos, double ypos)
+{
+    if (instance && instance->callbacks)
+    {
+        instance->callbacks->mouseMoveCallback(window, xpos, ypos);
+    }
+}
+
 void WindowManager::resize_callback(GLFWwindow * window, int in_width, int in_height)
 {
+    // Update the viewport width and height. Also update stored properties.
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    glViewport(0, 0, width, height);
+    instance->width = width;
+    instance->height = height;
+    instance->aspect = width / (float)height;
+    
 	if (instance && instance->callbacks)
 	{
 		instance->callbacks->resizeCallback(window, in_width, in_height);
