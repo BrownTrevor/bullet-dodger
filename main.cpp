@@ -273,7 +273,7 @@ public:
 		for (int ii = 0; ii < 200; ii++)
 			animmat[ii] = mat4(1);
 		
-		readtobone("../../resources/test.fbx",&all_animation,&root);
+		readtobone(resourceDirectory + "/test.fbx",&all_animation,&root);
 		root->set_animations(&all_animation,animmat,animmatsize);
 		
 			
