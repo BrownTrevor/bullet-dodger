@@ -13,7 +13,7 @@ based on CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 
 #include "WindowManager.h"
 #include "Shape.h"
-#include "Line.h"
+#include "line.h"
 #include "bone.h"
 using namespace std;
 using namespace glm;
@@ -165,6 +165,30 @@ class Application : public EventCallbacks
 
 public:
 
+    WindowManager *windowManager = nullptr;
+    
+    // Our shader program
+    std::shared_ptr<Program> shape, prog;
+    
+    GLuint VertexArrayID;
+    GLuint VertexBufferID, VertexBufferIDimat, VertexNormDBox, VertexTexBox, IndexBufferIDBox;
+    
+    
+    //animation matrices:
+    mat4 animmat[200];
+    int animmatsize=0;
+    
+    string filename;
+    double gametime = 0;
+    bool mousePressed = false;
+    bool mouseCaptured = false;
+    glm::vec2 mouseMoveOrigin = glm::vec2(0);
+    glm::vec3 mouseMoveInitialCameraRot;
+    bone *root = NULL;
+    int size_stick = 0;
+    all_animations all_animation;
+    
+    /*
 	WindowManager * windowManager = nullptr;
 
 	// Our shader program
@@ -188,6 +212,11 @@ public:
 	//animation matrices:
 	mat4 animmat[200];
 	int animmatsize=0;
+    
+    bone *root = NULL;
+    int size_stick = 0;
+    all_animations all_animation;
+     */
 
 	void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 	{
@@ -257,35 +286,18 @@ public:
 				smoothrender.re_init_line(cardinal);
 				}
 		}
-=======
-	
-    
->>>>>>> 290fe6a8db4c17c34ed0685a28b7ddb103fece04
 	}
 
 	// callback for the mouse when clicked move the triangle when helper functions
 	// written
 	void mouseCallback(GLFWwindow *window, int button, int action, int mods)
 	{
-		double posX, posY;
-		float newPt[2];
-		if (action == GLFW_PRESS)
-		{
-			glfwGetCursorPos(window, &posX, &posY);
-			std::cout << "Pos X " << posX <<  " Pos Y " << posY << std::endl;
-
-			//change this to be the points converted to WORLD
-			//THIS IS BROKEN< YOU GET TO FIX IT - yay!
-			newPt[0] = 0;
-			newPt[1] = 0;
-
-			std::cout << "converted:" << newPt[0] << " " << newPt[1] << std::endl;
-			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID);
-			//update the vertex array with the updated points
-			glBufferSubData(GL_ARRAY_BUFFER, sizeof(float)*6, sizeof(float)*2, newPt);
-			glBindBuffer(GL_ARRAY_BUFFER, 0);
-		}
+		//DO NOTHING RIGHT NOW
 	}
+    
+    void mouseMoveCallback(GLFWwindow *window, double xpos, double ypos) {
+        //DO NOTHING RIGHT NOW
+    }
 
 	//if the window is resized, capture the new size and reset the viewport
 	void resizeCallback(GLFWwindow *window, int in_width, int in_height)
@@ -297,14 +309,11 @@ public:
 	}
 
 	/*Note that any gl calls must always happen after a GL state is initialized */
-	bone *root = NULL;
-	int size_stick = 0;
-	all_animations all_animation;
+	
 	void initGeom(const std::string& resourceDirectory)
 	{
 
-		
-
+    
 		for (int ii = 0; ii < 200; ii++)
 			animmat[ii] = mat4(1);
 		
@@ -404,8 +413,36 @@ public:
 		line.push_back(vec3(-3,-2,-15));
 		line.push_back(vec3(0,1.5,-20));
 		linerender.re_init_line(line);
-=======
->>>>>>> 290fe6a8db4c17c34ed0685a28b7ddb103fece04
+
+        glGenVertexArrays(1, &VertexArrayID);
+        glBindVertexArray(VertexArrayID);
+        glGenBuffers(1, &VertexBufferID);
+        glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID);
+        
+        vector<vec3> pos;
+        vector<unsigned int> imat;
+        root->write_to_VBOs(vec3(0, 0, 0), pos, imat);
+        size_stick = pos.size();
+        
+        //====================================================================================================
+        // Allocate Space for Bones
+        //====================================================================================================
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vec3)*pos.size(), pos.data(), GL_DYNAMIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+        
+        //====================================================================================================
+        // Allocate Space for Animations
+        //====================================================================================================
+        glGenBuffers(1, &VertexBufferIDimat);
+        glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imat.size(), imat.data(), GL_DYNAMIC_DRAW);
+        glEnableVertexAttribArray(1);
+        glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
+        
+        glBindVertexArray(0);
+        
+        glUseProgram(prog->pid);
 	}
 
 	//General OGL initialization - set OGL state here
@@ -417,8 +454,6 @@ public:
 		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 		// Enable z-buffer test.
 		glEnable(GL_DEPTH_TEST);
-		//glDisable(GL_DEPTH_TEST);
-		// Initialize the GLSL program.
 		prog = std::make_shared<Program>();
 		prog->setVerbose(true);
 		prog->setShaderNames(resourceDirectory + "/shader_vertex.glsl", resourceDirectory + "/shader_fragment.glsl");
@@ -436,46 +471,13 @@ public:
 		prog->addAttribute("vertimat");
 
 
-		psky = std::make_shared<Program>();
-		psky->setVerbose(true);
-		psky->setShaderNames(resourceDirectory + "/skyvertex.glsl", resourceDirectory + "/skyfrag.glsl");
-		if (!psky->init())
-		{
-			std::cerr << "One or more shaders failed to compile... exiting!" << std::endl;
-			exit(1);
-		}
-		psky->addUniform("P");
-		psky->addUniform("V");
-		psky->addUniform("M");
-		psky->addUniform("campos");
-		psky->addAttribute("vertPos");
-		psky->addAttribute("vertNor");
-		psky->addAttribute("vertTex");
-
-		pplane = std::make_shared<Program>();
-		pplane->setVerbose(true);
-		pplane->setShaderNames(resourceDirectory + "/plane_vertex.glsl", resourceDirectory + "/plane_frag.glsl");
-		if (!pplane->init())
-			{
-			std::cerr << "One or more shaders failed to compile... exiting!" << std::endl;
-			exit(1);
-			}
-		pplane->addUniform("P");
-		pplane->addUniform("V");
-		pplane->addUniform("M");
-		pplane->addUniform("campos");
-		pplane->addAttribute("vertPos");
-		pplane->addAttribute("vertNor");
-		pplane->addAttribute("vertTex");
 	}
 
-
-	/****DRAW
-	This is the most important function in your program - this is where you
-	will actually issue the commands to draw any geometry you have set up to
-	draw
-	********/
-
+    glm::mat4 getPerspectiveMatrix() {
+        float fov = 3.14159f / 4.0f;
+        float aspect = windowManager->getAspect();
+        return glm::perspective(fov, aspect, 0.01f, 10000.0f);
+    }
 	
 	void render()
 	{
@@ -589,22 +591,72 @@ public:
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, Texture);
 
-=======
->>>>>>> 290fe6a8db4c17c34ed0685a28b7ddb103fece04
+
+        //====================================================================================================
+        // INIT
+        //====================================================================================================
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glClearColor(0.3f, 0.7f, 0.8f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        
+        
+        
+        
+        //====================================================================================================
+        // Frame Data
+        //====================================================================================================
+        double frametime = get_last_elapsed_time();
+        static double totaltime_ms=0;
+        totaltime_ms += frametime*1000.0;
+        static double totaltime_untilframe_ms = 0;
+        totaltime_untilframe_ms += frametime*1000.0;
+        
+        for (int ii = 0; ii < 200; ii++)
+            animmat[ii] = mat4(1);
+        
+        //animation frame system
+        int anim_step_width_ms = 8490 / 204;
+        static int frame = 0;
+        if (totaltime_untilframe_ms >= anim_step_width_ms)
+        {
+            totaltime_untilframe_ms = 0;
+            frame++;
+        }
+        root->play_animation(frame,"axisneurontestfile_Avatar00");    //name of current animation
+        
+       
+        //====================================================================================================
+        // Setup Matrices
+        //====================================================================================================
+        glm::mat4 V, M, P;
+        P = getPerspectiveMatrix();
+        V = mycam.process(frametime);
+        M = glm::mat4(1);
+        
+        glm::mat4 TransZ = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -8));
+        glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
+        M = TransZ * S;
+        
+
+        
+        //====================================================================================================
+        // Send to Shaders and draw
+        //====================================================================================================
+        glBindVertexArray(VertexArrayID);
+        
+        prog->bind();
         glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, &P[0][0]);
         glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, &V[0][0]);
         glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, &M[0][0]);
-
-
-		glm::mat4 TransZ = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -8));
-		glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
-		M = TransZ * S;
-		glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, &M[0][0]);
-		glUniformMatrix4fv(prog->getUniform("Manim"), 200, GL_FALSE, &animmat[0][0][0]);
-		glDrawArrays(GL_LINES, 4, size_stick-4);
-		glBindVertexArray(0);		
-		prog->unbind();
-
+        glUniformMatrix4fv(prog->getUniform("Manim"), 200, GL_FALSE, &animmat[0][0][0]);
+        glDrawArrays(GL_LINES, 4, size_stick-4);
+        glBindVertexArray(0);
+        prog->unbind();
+        
+        
+    
 
 	}
 
