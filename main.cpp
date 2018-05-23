@@ -228,6 +228,7 @@ public:
 		{
 			mycam.d = 0;
 		}
+<<<<<<< HEAD
 		if (key == GLFW_KEY_Q && action == GLFW_PRESS)
 		{
 			myplayer.left = 1;
@@ -256,6 +257,10 @@ public:
 				smoothrender.re_init_line(cardinal);
 				}
 		}
+=======
+	
+    
+>>>>>>> 290fe6a8db4c17c34ed0685a28b7ddb103fece04
 	}
 
 	// callback for the mouse when clicked move the triangle when helper functions
@@ -306,6 +311,7 @@ public:
 		readtobone(resourceDirectory + "/test.fbx",&all_animation,&root);
 		root->set_animations(&all_animation,animmat,animmatsize);
 		
+<<<<<<< HEAD
 			
 		// Initialize mesh.
 		shape = make_shared<Shape>();
@@ -398,6 +404,8 @@ public:
 		line.push_back(vec3(-3,-2,-15));
 		line.push_back(vec3(0,1.5,-20));
 		linerender.re_init_line(line);
+=======
+>>>>>>> 290fe6a8db4c17c34ed0685a28b7ddb103fece04
 	}
 
 	//General OGL initialization - set OGL state here
@@ -471,6 +479,7 @@ public:
 	
 	void render()
 	{
+<<<<<<< HEAD
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		double frametime = get_last_elapsed_time();
@@ -580,6 +589,8 @@ public:
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, Texture);
 
+=======
+>>>>>>> 290fe6a8db4c17c34ed0685a28b7ddb103fece04
         glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, &P[0][0]);
         glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, &V[0][0]);
         glUniformMatrix4fv(prog->getUniform("M"), 1, GL_FALSE, &M[0][0]);
