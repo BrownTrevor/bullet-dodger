@@ -142,8 +142,23 @@ public:
 		return R*T;
 	}
 };
+class player
+{
+public:
+	int left, right;
+	
+	player()
+	{
+		left, right = 0;
+	}
+	glm::mat4 process(double ftime)
+	{
+		
+	}
+};
 
 camera mycam;
+player myplayer;
 
 class Application : public EventCallbacks
 {
@@ -156,7 +171,7 @@ public:
 	std::shared_ptr<Program> prog, psky, pplane;
 
 	// Contains vertex information for OpenGL
-	GLuint VertexArrayID;
+	GLuint VertexArrayID[2];
 
 	// Data necessary to give our box to OpenGL
 	GLuint VertexBufferID, VertexBufferIDimat, VertexNormDBox, VertexTexBox, IndexBufferIDBox;
@@ -213,7 +228,22 @@ public:
 		{
 			mycam.d = 0;
 		}
-	
+		if (key == GLFW_KEY_Q && action == GLFW_PRESS)
+		{
+			myplayer.left = 1;
+		}
+		if (key == GLFW_KEY_Q && action == GLFW_RELEASE)
+		{
+			myplayer.left = 0;
+		}
+		if (key == GLFW_KEY_E && action == GLFW_PRESS)
+		{
+			myplayer.right = 1;
+		}
+		if (key == GLFW_KEY_E && action == GLFW_RELEASE)
+		{
+			myplayer.right = 0;
+		}
 		
 		if (key == GLFW_KEY_C && action == GLFW_RELEASE)
 		{
@@ -289,32 +319,34 @@ public:
 		plane->init();
 
 		//generate the VAO
-		glGenVertexArrays(1, &VertexArrayID);
-		glBindVertexArray(VertexArrayID);
+		for (int i = 0; i < 2; i++) {
+			glGenVertexArrays(1, &VertexArrayID[i]);
+			glBindVertexArray(VertexArrayID[i]);
 
-		//generate vertex buffer to hand off to OGL
-		glGenBuffers(1, &VertexBufferID);
-		//set the current state to focus on our vertex buffer
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID);
-		
-		vector<vec3> pos;
-		vector<unsigned int> imat;
-		root->write_to_VBOs(vec3(0, 0, 0), pos, imat);
-		size_stick = pos.size();
-		//actually memcopy the data - only do this once
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3)*pos.size(), pos.data(), GL_DYNAMIC_DRAW);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-		//indices of matrix:
-		glGenBuffers(1, &VertexBufferIDimat);
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imat.size(), imat.data(), GL_DYNAMIC_DRAW);
-		glEnableVertexAttribArray(1);
-		glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
+			//generate vertex buffer to hand off to OGL
+			glGenBuffers(1, &VertexBufferID);
+			//set the current state to focus on our vertex buffer
+			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID);
+
+			vector<vec3> pos;
+			vector<unsigned int> imat;
+			root->write_to_VBOs(vec3(0, 0, 0), pos, imat);
+			size_stick = pos.size();
+			//actually memcopy the data - only do this once
+			glBufferData(GL_ARRAY_BUFFER, sizeof(vec3)*pos.size(), pos.data(), GL_DYNAMIC_DRAW);
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+			//indices of matrix:
+			glGenBuffers(1, &VertexBufferIDimat);
+			glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imat.size(), imat.data(), GL_DYNAMIC_DRAW);
+			glEnableVertexAttribArray(1);
+			glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
 
 
 
-		glBindVertexArray(0);
+			glBindVertexArray(0);
+		}
 
 	
 
@@ -458,10 +490,15 @@ public:
 			{
 			totaltime_untilframe_ms = 0;
 			frame++;
-			}
-		root->play_animation(frame,"axisneurontestfile_Avatar00");	//name of current animation	
-
-
+		}
+		if (frame > root->animation[0]->keyframes.size()) {
+			frame = 0;
+		}
+		if (myplayer.left) {
+			
+			root->play_animation(frame, "axisneurontestfile_Avatar00");	//name of current animation	
+		}
+		
 		// Get current frame buffer size.
 		int width, height;
 		glfwGetFramebufferSize(windowManager->getHandle(), &width, &height);
