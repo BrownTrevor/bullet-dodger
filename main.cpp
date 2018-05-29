@@ -15,10 +15,13 @@ based on CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 #include "Shape.h"
 #include "line.h"
 #include "bone.h"
+#define ANIMATION_COUNT 2
+#define IDLE 0
+#define STEP 1
 using namespace std;
 using namespace glm;
 shared_ptr<Shape> shape;
-shared_ptr<Shape> plane;
+shared_ptr<Shape> bulletG;
 mat4 linint_between_two_orientations(vec3 ez_aka_lookto_1, vec3 ey_aka_up_1, vec3 ez_aka_lookto_2, vec3 ey_aka_up_2, float t);
 
 
@@ -156,6 +159,33 @@ public:
 		
 	}
 };
+class bullet
+{
+public:
+	glm::vec3 pos, v;
+	bullet() {
+		pos = vec3(0, 3, -100);
+		v = vec3((rand() % 4) -2, (rand() % 4) - 2, 12);
+	}
+	void process(double ftime){
+		//glm::mat4 R = glm::rotate(glm::mat4(1), rot.y, glm::vec3(0, 1, 0));
+		//glm::vec4 dir = glm::vec4(0, 0, ftime, 1);
+		//dir = dir * v;
+		//pos += vec3(dir.x, dir.y, dir.z);
+		pos += v * (float)ftime;
+	}
+	mat4 getRot() {
+		mat4 Matrix;
+		vec3 Z = normalize(v);
+		vec3 X = normalize(cross(vec3(0,1,0),Z));
+		vec3 Y = normalize(cross(Z, X));
+		Matrix[0][0] = X.x; Matrix[0][1] = X.y; Matrix[0][2] = X.z; Matrix[0][3] = 0;
+		Matrix[1][0] = Y.x; Matrix[1][1] = Y.y; Matrix[1][2] = Y.z; Matrix[1][3] = 0;
+		Matrix[2][0] = Z.x; Matrix[2][1] = Z.y; Matrix[2][2] = Z.z; Matrix[2][3] = 0;
+		Matrix[3][0] = 0; Matrix[3][1] = 0; Matrix[3][2] = 0; Matrix[3][3] = 1.0f;
+		return Matrix * rotate(mat4(1), (float)(3.1415 / 2), vec3(1, 0, 0));;
+	}
+};
 
 camera mycam;
 player myplayer;
@@ -168,10 +198,12 @@ public:
     WindowManager *windowManager = nullptr;
     
     // Our shader program
-    std::shared_ptr<Program> shape, prog;
+    std::shared_ptr<Program> shape, prog, bulletsh;
     
     GLuint VertexArrayID;
-    GLuint VertexBufferID, VertexBufferIDimat, VertexNormDBox, VertexTexBox, IndexBufferIDBox;
+	GLuint VertexBufferID[ANIMATION_COUNT];
+	GLuint VertexBufferIDimat[ANIMATION_COUNT];
+    GLuint VertexNormDBox, VertexTexBox, IndexBufferIDBox;
     
     
     //animation matrices:
@@ -184,10 +216,14 @@ public:
     bool mouseCaptured = false;
     glm::vec2 mouseMoveOrigin = glm::vec2(0);
     glm::vec3 mouseMoveInitialCameraRot;
-    bone *root = NULL;
+	bone *root = NULL;
+	//bone *rootIDLE = NULL;
+	//bone *rootSTEP = NULL;
     int size_stick = 0;
     all_animations all_animation;
     
+	//bullet vector
+	vector<bullet> bullets;
 
 
 	void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -272,44 +308,81 @@ public:
 	
 	void initGeom(const std::string& resourceDirectory)
 	{
+		//====================================================================================================
+		// Create Geometry for Bullet
+		//===================================================================================================
+		bulletG = make_shared<Shape>();
+		bulletG->loadMesh(resourceDirectory + "/bullet.obj");
+		bulletG->resize();
+		bulletG->init();
 
-    
 		for (int ii = 0; ii < 200; ii++)
 			animmat[ii] = mat4(1);
 		
-		readtobone(resourceDirectory + "/test.fbx",&all_animation,&root);
-		root->set_animations(&all_animation,animmat,animmatsize);
+		readtobone(resourceDirectory + "/test.fbx", &all_animation, &root, 0);
+		root->set_animations(&all_animation, animmat, animmatsize);
+		//readtobone(resourceDirectory + "/sidestep.fbx", &all_animation, &root, 1);
+		//root->set_animations(&all_animation, animmat, animmatsize);
+
+		/*
+		readtobone(resourceDirectory + "/test.fbx", &all_animation, &rootIDLE,0);
+		rootIDLE->set_animations(&all_animation, animmat, animmatsize);
+
+		readtobone(resourceDirectory + "/sidestepChar00.fbx", &all_animation, &rootSTEP,1);
+		rootSTEP->set_animations(&all_animation, animmat, animmatsize);
+		*/
+
+		glGenVertexArrays(1, &VertexArrayID);
+		glBindVertexArray(VertexArrayID);
+		/*aniamtion IDLE*/
+		glGenBuffers(1, &VertexBufferID[IDLE]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID[IDLE]);
+		vector<vec3> posIDLE;
+		vector<unsigned int> imatIDLE;
+		root->write_to_VBOs(vec3(0, 0, 0), posIDLE, imatIDLE);
+		size_stick = posIDLE.size();
+
+		/*aniamtion STEP*/
+		glGenBuffers(1, &VertexBufferID[STEP]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID[STEP]);
+		vector<vec3> posSTEP;
+		vector<unsigned int> imatSTEP;
+		root->write_to_VBOs(vec3(0, 0, 0), posSTEP, imatSTEP);
+		size_stick = posSTEP.size();
+		
 		
 
-        glGenVertexArrays(1, &VertexArrayID);
-        glBindVertexArray(VertexArrayID);
-        glGenBuffers(1, &VertexBufferID);
-        glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID);
-        
-        vector<vec3> pos;
-        vector<unsigned int> imat;
-        root->write_to_VBOs(vec3(0, 0, 0), pos, imat);
-        size_stick = pos.size();
-        
-        //====================================================================================================
-        // Allocate Space for Bones
-        //====================================================================================================
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vec3)*pos.size(), pos.data(), GL_DYNAMIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-        
-        //====================================================================================================
-        // Allocate Space for Animations
-        //====================================================================================================
-        glGenBuffers(1, &VertexBufferIDimat);
-        glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imat.size(), imat.data(), GL_DYNAMIC_DRAW);
-        glEnableVertexAttribArray(1);
-        glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
-        
-        glBindVertexArray(0);
-        
-        glUseProgram(prog->pid);
+		//====================================================================================================
+		// Allocate Space for Bones
+		//====================================================================================================
+		/*animation idle*/
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3)*posIDLE.size(), posIDLE.data(), GL_DYNAMIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		/*animation step*/
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3)*posSTEP.size(), posSTEP.data(), GL_DYNAMIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+		//====================================================================================================
+		// Allocate Space for Animations
+		//====================================================================================================
+		/*animation idle*/
+		glGenBuffers(1, &VertexBufferIDimat[IDLE]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat[IDLE]);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imatIDLE.size(), imatIDLE.data(), GL_DYNAMIC_DRAW);
+		glEnableVertexAttribArray(1);
+		glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
+
+		/*animation idle*/
+		glGenBuffers(1, &VertexBufferIDimat[STEP]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat[STEP]);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imatSTEP.size(), imatSTEP.data(), GL_DYNAMIC_DRAW);
+		glEnableVertexAttribArray(1);
+		glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
+
+		glBindVertexArray(0);
+		glUseProgram(prog->pid);
 	}
 
 	//General OGL initialization - set OGL state here
@@ -337,6 +410,21 @@ public:
 		prog->addAttribute("vertPos");
 		prog->addAttribute("vertimat");
 
+		bulletsh = std::make_shared<Program>();
+		bulletsh->setVerbose(true);
+		bulletsh->setShaderNames(resourceDirectory + "/plane_vertex.glsl", resourceDirectory + "/plane_frag.glsl");
+		if (!bulletsh->init())
+		{
+			std::cerr << "One or more shaders failed to compile... exiting!" << std::endl;
+			exit(1);
+		}
+		bulletsh->addUniform("P");
+		bulletsh->addUniform("V");
+		bulletsh->addUniform("M");
+		bulletsh->addUniform("campos");
+		bulletsh->addAttribute("vertPos");
+		bulletsh->addAttribute("vertNor");
+		bulletsh->addAttribute("vertTex");
 
 	}
 
@@ -350,41 +438,77 @@ public:
 	{
 
 
-        //====================================================================================================
-        // INIT
-        //====================================================================================================
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glClearColor(0.3f, 0.7f, 0.8f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        
-        
-        
-        
-        //====================================================================================================
-        // Frame Data
-        //====================================================================================================
-        double frametime = get_last_elapsed_time();
-        static double totaltime_ms=0;
-        totaltime_ms += frametime*1000.0;
-        static double totaltime_untilframe_ms = 0;
-        totaltime_untilframe_ms += frametime*1000.0;
-        
-        for (int ii = 0; ii < 200; ii++)
-            animmat[ii] = mat4(1);
-        
-        //animation frame system
-        int anim_step_width_ms = 8490 / 204;
-        static int frame = 0;
-        if (totaltime_untilframe_ms >= anim_step_width_ms)
-        {
-            totaltime_untilframe_ms = 0;
-            frame++;
-        }
-        root->play_animation(frame,"axisneurontestfile_Avatar00");    //name of current animation
-        
+		//====================================================================================================
+		// INIT
+		//====================================================================================================
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glClearColor(0.3f, 0.7f, 0.8f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+
+
+
+		//====================================================================================================
+		// Frame Data
+		//====================================================================================================
+		double frametime = get_last_elapsed_time();
+		static double totaltime_ms = 0;
+		totaltime_ms += frametime * 1000.0;
+		static double totaltime_untilframe_ms = 0;
+		totaltime_untilframe_ms += frametime * 1000.0;
+		//====================================================================================================
+		// Fire Bullet
+		//====================================================================================================
+		static int ticks = 0;
+		/*fire bullet every second*/
+		if (totaltime_ms / 10000 * 8 > ticks) {
+			cout << to_string(totaltime_ms / 1000) << " " << to_string(ticks) << endl;
+			ticks++;
+			bullet x;
+			bullets.push_back(x);
+		}
+		/*process bullet*/
+		for (int bi = 0; bi < bullets.size(); bi++) {
+			bullets.at(bi).process(frametime);
+			if (bullets.at(bi).pos.z > 0) {
+				bullets.erase(bullets.begin() + bi);
+			}
+		}
+		/*draw bullet*/
+
+
+		/*idle animation*/
+		for (int ii = 0; ii < 200; ii++)
+			animmat[ii] = mat4(1);
+
+		//animation frame system
+		int anim_step_width_ms = 8490 / 204;
+		static int frame = 0;
+		glm::mat4 lrscale = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
+		if (myplayer.left || myplayer.right) {
+			if (myplayer.left) {
+				glm::scale(glm::mat4(1.0f), glm::vec3(-1.0f, -1.0f, -1.0f));
+			}
+			if (totaltime_untilframe_ms >= anim_step_width_ms)
+			{
+			totaltime_untilframe_ms = 0;
+			frame++;
+			}
+			
+			if (frame > root->animation[0]->keyframes.size()) {
+				frame = 0;
+			}
+			
+			//root->play_animation(frame, "avatar_o_fbx_tmb");    //name of current animation
+			root->play_animation(frame, "axisneurontestfile_Avatar00");    //name of current animation
+		}
+		else {
+			
+		}
        
+		
         //====================================================================================================
         // Setup Matrices
         //====================================================================================================
@@ -395,15 +519,15 @@ public:
         
         glm::mat4 TransZ = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -8));
         glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
-        M = TransZ * S;
+        M =  TransZ * S * lrscale ;
         
 
         
         //====================================================================================================
-        // Send to Shaders and draw
+        // Send to Shaders and draw Animation
         //====================================================================================================
-        glBindVertexArray(VertexArrayID);
         
+		glBindVertexArray(VertexArrayID);
         prog->bind();
         glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, &P[0][0]);
         glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, &V[0][0]);
@@ -413,7 +537,21 @@ public:
         glBindVertexArray(0);
         prog->unbind();
         
-        
+		//====================================================================================================
+		// Send to Shaders and draw Bullet
+		//====================================================================================================
+
+		bulletsh->bind();
+		for (int bi = 0; bi < bullets.size(); bi++) {
+			mat4 transbullet = glm::translate(glm::mat4(1.0f), bullets.at(bi).pos);
+			M = transbullet * bullets.at(bi).getRot();
+			glUniformMatrix4fv(bulletsh->getUniform("P"), 1, GL_FALSE, &P[0][0]);
+			glUniformMatrix4fv(bulletsh->getUniform("V"), 1, GL_FALSE, &V[0][0]);
+			glUniformMatrix4fv(bulletsh->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+			glUniform3fv(bulletsh->getUniform("campos"), 1, &mycam.pos[0]);
+			bulletG->draw(bulletsh, false);			//render!!!!!!!
+		}
+		bulletsh->unbind();
     
 
 	}
