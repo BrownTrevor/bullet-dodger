@@ -99,4 +99,4 @@ public:
 		}
 
 };
-int readtobone(string file,all_animations *all_animation, bone **proot);
+int readtobone(string file,all_animations *all_animation, bone **proot,int flag);
