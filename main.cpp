@@ -15,11 +15,12 @@ based on CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 #include "Shape.h"
 #include "line.h"
 #include "bone.h"
+#include "controller.h"
 #define ANIMATION_COUNT 2
 #define IDLE 0
 #define STEP 1
 #define ROT_MAX 1.570796
-#define ROT_TIME .5;
+#define ROT_TIME .005;
 using namespace std;
 using namespace glm;
 shared_ptr<Shape> shape;
@@ -212,14 +213,14 @@ public:
     glm::vec2 mouseMoveOrigin = glm::vec2(0);
     glm::vec3 mouseMoveInitialCameraRot;
 	bone *root = NULL;
-	//bone *rootIDLE = NULL;
-	//bone *rootSTEP = NULL;
     int size_stick = 0;
     all_animations all_animation;
     
 	//bullet vector
 	vector<bullet> bullets;
 
+	//controller global
+	CXBOXController *gamepad = new CXBOXController(1);
 
 	void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 	{
@@ -435,7 +436,42 @@ public:
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+		//====================================================================================================
+		// Game Pad
+		//====================================================================================================
 
+		if (gamepad->IsConnected())
+		{
+
+			//	BUTTON PRESS
+			if (gamepad->GetState().Gamepad.wButtons & XINPUT_GAMEPAD_Y)
+				mycam.w = 1;
+			else
+				mycam.w = 0;
+			if (gamepad->GetState().Gamepad.wButtons & XINPUT_GAMEPAD_A)
+			{
+				mycam.s = 1;
+			}
+			else
+				mycam.s = 0;
+
+		}
+		// ANALOG STICKS
+		SHORT lx = gamepad->GetState().Gamepad.sThumbLX;
+		SHORT ly = gamepad->GetState().Gamepad.sThumbLY;
+
+		if (abs(ly) > 3000)
+		{
+			float angle_x = (float)ly / 32000.0;
+			angle_x *= 0.05;
+			mycam.rot.x -= angle_x;
+		}
+		if (abs(lx) > 3000)
+		{
+			float angle_y = (float)lx / 32000.0;
+			angle_y *= 0.05;
+			mycam.rot.y -= angle_y;
+		}
 
 
 		//====================================================================================================
@@ -490,6 +526,7 @@ public:
 					myplayer.lr += frametime * 1000.0 * ROT_TIME;
 				}
 			}
+			//switch to running
 			if (myplayer.state < .999) {
 				myplayer.state += 1 / avgkfn;
 			}
@@ -498,12 +535,24 @@ public:
 			if (myplayer.state > .001) {
 				myplayer.state -= 1 / avgkfn;
 			}
+			//decay rotation
+			float decay_step = frametime * 1000.0 * ROT_TIME;
+			if (abs(myplayer.lr) < decay_step) {
+				myplayer.lr = 0;
+			}
+			else if (myplayer.lr > 0) {
+				myplayer.lr -= decay_step;
+			}
+			else {
+				myplayer.lr += decay_step;
+			}
 		}
 		//loop animation
-		if (myplayer.ff)
+		if ( myplayer.ff )
 			frametime *= 2;
-		if (myplayer.rr)
+		if ( myplayer.rr )
 			frametime /= 2;
+		
 		fframe += (frametime * 1000.0 / anim_step_width_ms);
 		root->play_animation(&fframe, 0, 1, myplayer.state);
 
