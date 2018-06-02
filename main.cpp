@@ -15,9 +15,12 @@ based on CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 #include "Shape.h"
 #include "line.h"
 #include "bone.h"
+#include "controller.h"
 #define ANIMATION_COUNT 2
 #define IDLE 0
 #define STEP 1
+#define ROT_MAX 1.570796
+#define ROT_TIME .005;
 using namespace std;
 using namespace glm;
 shared_ptr<Shape> shape;
@@ -137,8 +140,8 @@ public:
 		else if(d==1)
 			yangle = 3*ftime;
 		rot.y += yangle;
-		glm::mat4 R = glm::rotate(glm::mat4(1), rot.y, glm::vec3(0, 1, 0));
 		glm::vec4 dir = glm::vec4(0, 0, speed,1);
+		glm::mat4 R = glm::rotate(glm::mat4(1), rot.y, glm::vec3(0, 1, 0));
 		dir = dir*R;
 		pos += glm::vec3(dir.x, dir.y, dir.z);
 		glm::mat4 T = glm::translate(glm::mat4(1), pos);
@@ -148,15 +151,12 @@ public:
 class player
 {
 public:
-	int left, right;
+	int left, right,ff,rr;
+	float lr, state;
 	
 	player()
 	{
-		left, right = 0;
-	}
-	glm::mat4 process(double ftime)
-	{
-		
+		left, right,state,ff,rr = 0;
 	}
 };
 class bullet
@@ -168,10 +168,6 @@ public:
 		v = vec3((rand() % 4) -2, (rand() % 4) - 2, 12);
 	}
 	void process(double ftime){
-		//glm::mat4 R = glm::rotate(glm::mat4(1), rot.y, glm::vec3(0, 1, 0));
-		//glm::vec4 dir = glm::vec4(0, 0, ftime, 1);
-		//dir = dir * v;
-		//pos += vec3(dir.x, dir.y, dir.z);
 		pos += v * (float)ftime;
 	}
 	mat4 getRot() {
@@ -217,14 +213,14 @@ public:
     glm::vec2 mouseMoveOrigin = glm::vec2(0);
     glm::vec3 mouseMoveInitialCameraRot;
 	bone *root = NULL;
-	//bone *rootIDLE = NULL;
-	//bone *rootSTEP = NULL;
     int size_stick = 0;
     all_animations all_animation;
     
 	//bullet vector
 	vector<bullet> bullets;
 
+	//controller global
+	CXBOXController *gamepad = new CXBOXController(1);
 
 	void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 	{
@@ -281,6 +277,22 @@ public:
 		{
 			myplayer.right = 0;
 		}
+		if (key == GLFW_KEY_O && action == GLFW_PRESS)
+		{
+			myplayer.rr = 1;
+		}
+		if (key == GLFW_KEY_O && action == GLFW_RELEASE)
+		{
+			myplayer.rr = 0;
+		}
+		if (key == GLFW_KEY_P && action == GLFW_PRESS)
+		{
+			myplayer.ff = 1;
+		}
+		if (key == GLFW_KEY_P && action == GLFW_RELEASE)
+		{
+			myplayer.ff = 0;
+		}
 		
 	}
 
@@ -318,19 +330,11 @@ public:
 
 		for (int ii = 0; ii < 200; ii++)
 			animmat[ii] = mat4(1);
-		
-		readtobone(resourceDirectory + "/test.fbx", &all_animation, &root, 0);
+		readtobone(resourceDirectory + "/walk.FBX", &all_animation, &root, 1);
+		readtobone(resourceDirectory + "/run.FBX", &all_animation, &root, 0);
 		root->set_animations(&all_animation, animmat, animmatsize);
-		//readtobone(resourceDirectory + "/sidestep.fbx", &all_animation, &root, 1);
-		//root->set_animations(&all_animation, animmat, animmatsize);
 
-		/*
-		readtobone(resourceDirectory + "/test.fbx", &all_animation, &rootIDLE,0);
-		rootIDLE->set_animations(&all_animation, animmat, animmatsize);
-
-		readtobone(resourceDirectory + "/sidestepChar00.fbx", &all_animation, &rootSTEP,1);
-		rootSTEP->set_animations(&all_animation, animmat, animmatsize);
-		*/
+	
 
 		glGenVertexArrays(1, &VertexArrayID);
 		glBindVertexArray(VertexArrayID);
@@ -342,13 +346,7 @@ public:
 		root->write_to_VBOs(vec3(0, 0, 0), posIDLE, imatIDLE);
 		size_stick = posIDLE.size();
 
-		/*aniamtion STEP*/
-		glGenBuffers(1, &VertexBufferID[STEP]);
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID[STEP]);
-		vector<vec3> posSTEP;
-		vector<unsigned int> imatSTEP;
-		root->write_to_VBOs(vec3(0, 0, 0), posSTEP, imatSTEP);
-		size_stick = posSTEP.size();
+		
 		
 		
 
@@ -359,10 +357,7 @@ public:
 		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3)*posIDLE.size(), posIDLE.data(), GL_DYNAMIC_DRAW);
 		glEnableVertexAttribArray(0);
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-		/*animation step*/
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vec3)*posSTEP.size(), posSTEP.data(), GL_DYNAMIC_DRAW);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+		
 
 		//====================================================================================================
 		// Allocate Space for Animations
@@ -374,12 +369,6 @@ public:
 		glEnableVertexAttribArray(1);
 		glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
 
-		/*animation idle*/
-		glGenBuffers(1, &VertexBufferIDimat[STEP]);
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat[STEP]);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imatSTEP.size(), imatSTEP.data(), GL_DYNAMIC_DRAW);
-		glEnableVertexAttribArray(1);
-		glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
 
 		glBindVertexArray(0);
 		glUseProgram(prog->pid);
@@ -481,7 +470,42 @@ public:
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+		//====================================================================================================
+		// Game Pad
+		//====================================================================================================
 
+		if (gamepad->IsConnected())
+		{
+
+			//	BUTTON PRESS
+			if (gamepad->GetState().Gamepad.wButtons & XINPUT_GAMEPAD_Y)
+				mycam.w = 1;
+			else
+				mycam.w = 0;
+			if (gamepad->GetState().Gamepad.wButtons & XINPUT_GAMEPAD_A)
+			{
+				mycam.s = 1;
+			}
+			else
+				mycam.s = 0;
+
+		}
+		// ANALOG STICKS
+		SHORT lx = gamepad->GetState().Gamepad.sThumbLX;
+		SHORT ly = gamepad->GetState().Gamepad.sThumbLY;
+
+		if (abs(ly) > 3000)
+		{
+			float angle_x = (float)ly / 32000.0;
+			angle_x *= 0.05;
+			mycam.rot.x -= angle_x;
+		}
+		if (abs(lx) > 3000)
+		{
+			float angle_y = (float)lx / 32000.0;
+			angle_y *= 0.05;
+			mycam.rot.y -= angle_y;
+		}
 
 
 		//====================================================================================================
@@ -510,7 +534,6 @@ public:
 				bullets.erase(bullets.begin() + bi);
 			}
 		}
-		/*draw bullet*/
 
 
 		/*idle animation*/
@@ -519,30 +542,61 @@ public:
 
 		//animation frame system
 		int anim_step_width_ms = 8490 / 204;
-		static int frame = 0;
-		glm::mat4 lrscale = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
+		static int frame = 0; 
+		
+		//find average step
+		float avgkfn = (root->animation[0]->keyframes.size() + root->animation[1]->keyframes.size()) / 2;
+		static float fframe = 0;
 		if (myplayer.left || myplayer.right) {
+			//rotate left -
 			if (myplayer.left) {
-				glm::scale(glm::mat4(1.0f), glm::vec3(-1.0f, -1.0f, -1.0f));
+				if (myplayer.lr  > -ROT_MAX) {
+					myplayer.lr -= frametime * 1000.0 * ROT_TIME;
+				}
 			}
-			if (totaltime_untilframe_ms >= anim_step_width_ms)
-			{
-			totaltime_untilframe_ms = 0;
-			frame++;
+			//rotate right +
+			else {
+				if (myplayer.lr  < ROT_MAX) {
+					myplayer.lr += frametime * 1000.0 * ROT_TIME;
+				}
 			}
-			
-			if (frame > root->animation[0]->keyframes.size()) {
-				frame = 0;
+			//switch to running
+			if (myplayer.state < .999) {
+				myplayer.state += 1 / avgkfn;
 			}
-			
-			//root->play_animation(frame, "avatar_o_fbx_tmb");    //name of current animation
-			root->play_animation(frame, "axisneurontestfile_Avatar00");    //name of current animation
 		}
 		else {
-			
+			if (myplayer.state > .001) {
+				myplayer.state -= 1 / avgkfn;
+			}
+			//decay rotation
+			float decay_step = frametime * 1000.0 * ROT_TIME;
+			if (abs(myplayer.lr) < decay_step) {
+				myplayer.lr = 0;
+			}
+			else if (myplayer.lr > 0) {
+				myplayer.lr -= decay_step;
+			}
+			else {
+				myplayer.lr += decay_step;
+			}
 		}
+<<<<<<< HEAD
 >>>>>>> 3b481b8d4bc89117c61feea59bbdf2d22bde9759
        
+=======
+		//loop animation
+		if ( myplayer.ff )
+			frametime *= 2;
+		if ( myplayer.rr )
+			frametime /= 2;
+		
+		fframe += (frametime * 1000.0 / anim_step_width_ms);
+		root->play_animation(&fframe, 0, 1, myplayer.state);
+
+		//rotate player
+		glm::mat4 player_rotate = glm::rotate(glm::mat4(1), myplayer.lr, glm::vec3(0, 1, 0));
+>>>>>>> 7e10af6e3cc6dd508d09b48483ff6c368d802de5
 		
         //====================================================================================================
         // Setup Matrices
@@ -554,7 +608,7 @@ public:
         
         glm::mat4 TransZ = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -8));
         glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
-        M =  TransZ * S * lrscale ;
+        M =  TransZ * player_rotate * S;
         
 
         
