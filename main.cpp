@@ -153,7 +153,7 @@ class player
 public:
 	int left, right,ff,rr;
 	float lr, state;
-	
+	vec3 pos = vec3(0.0f,0.0f,0.0f);
 	player()
 	{
 		left, right,state,ff,rr = 0;
