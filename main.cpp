@@ -15,7 +15,6 @@ based on CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 #include "Shape.h"
 #include "line.h"
 #include "bone.h"
-#include "controller.h"
 #define ANIMATION_COUNT 2
 #define IDLE 0
 #define STEP 1
@@ -26,6 +25,8 @@ using namespace glm;
 shared_ptr<Shape> shape;
 shared_ptr<Shape> bulletG;
 mat4 linint_between_two_orientations(vec3 ez_aka_lookto_1, vec3 ey_aka_up_1, vec3 ez_aka_lookto_2, vec3 ey_aka_up_2, float t);
+
+
 
 
 //*************************************************************************************************
@@ -200,7 +201,7 @@ public:
 	GLuint VertexBufferID[ANIMATION_COUNT];
 	GLuint VertexBufferIDimat[ANIMATION_COUNT];
     GLuint VertexNormDBox, VertexTexBox, IndexBufferIDBox;
-    
+    GLuint SkyTex;
     
     //animation matrices:
     mat4 animmat[200];
@@ -220,7 +221,7 @@ public:
 	vector<bullet> bullets;
 
 	//controller global
-	CXBOXController *gamepad = new CXBOXController(1);
+	//CXBOXController *gamepad = new CXBOXController(1);
 
 	void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 	{
@@ -320,6 +321,34 @@ public:
 	
 	void initGeom(const std::string& resourceDirectory)
 	{
+        
+        //====================================================================================================
+        // Create Geometry Sky Sphere
+        //===================================================================================================
+        
+        /*
+        //shape->loadMesh(resourceDirectory + "/sphere.obj");
+        //shape->resize();
+        //shape->init();
+        
+        int width, height, channels;
+        char filepath[1000];
+        
+        //Sky Sphere
+        string str = resourceDirectory + "/stars_milky_way.jpg";
+        strcpy(filepath, str.c_str());
+        unsigned char* data = stbi_load(filepath, &width, &height, &channels, 4);
+        glGenTextures(1, &NightTex);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, NightTex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        */
+        
 		//====================================================================================================
 		// Create Geometry for Bullet
 		//===================================================================================================
@@ -427,7 +456,6 @@ public:
 	{
 
 
-<<<<<<< HEAD
         //====================================================================================================
         // INIT
         //====================================================================================================
@@ -447,33 +475,11 @@ public:
         static double totaltime_untilframe_ms = 0;
         totaltime_untilframe_ms += frametime*1000.0;
         
-        for (int ii = 0; ii < 200; ii++)
-            animmat[ii] = mat4(1);
-        
-        //animation frame system
-        int anim_step_width_ms = 8490 / 204;
-        static int frame = 0;
-        if (totaltime_untilframe_ms >= anim_step_width_ms)
-        {
-            totaltime_untilframe_ms = 0;
-            frame++;
-        }
-        root->play_animation(frame,"axisneurontestfile_Avatar00");    //name of current animation
-        
-=======
-		//====================================================================================================
-		// INIT
-		//====================================================================================================
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glClearColor(0.3f, 0.7f, 0.8f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 		//====================================================================================================
 		// Game Pad
 		//====================================================================================================
-
+        /*
 		if (gamepad->IsConnected())
 		{
 
@@ -507,22 +513,17 @@ public:
 			mycam.rot.y -= angle_y;
 		}
 
-
-		//====================================================================================================
-		// Frame Data
-		//====================================================================================================
-		double frametime = get_last_elapsed_time();
-		static double totaltime_ms = 0;
-		totaltime_ms += frametime * 1000.0;
-		static double totaltime_untilframe_ms = 0;
-		totaltime_untilframe_ms += frametime * 1000.0;
+         */
+        
+        
+		
 		//====================================================================================================
 		// Fire Bullet
 		//====================================================================================================
 		static int ticks = 0;
 		/*fire bullet every second*/
 		if (totaltime_ms / 10000 * 8 > ticks) {
-			cout << to_string(totaltime_ms / 1000) << " " << to_string(ticks) << endl;
+			//cout << to_string(totaltime_ms / 1000) << " " << to_string(ticks) << endl;
 			ticks++;
 			bullet x;
 			bullets.push_back(x);
@@ -535,14 +536,18 @@ public:
 			}
 		}
 
-
+        //animation frame system
+        int anim_step_width_ms = 8490 / 204;
+        static int frame = 0;
+        if (totaltime_untilframe_ms >= anim_step_width_ms)
+        {
+            totaltime_untilframe_ms = 0;
+            frame++;
+        }
+        
 		/*idle animation*/
 		for (int ii = 0; ii < 200; ii++)
 			animmat[ii] = mat4(1);
-
-		//animation frame system
-		int anim_step_width_ms = 8490 / 204;
-		static int frame = 0; 
 		
 		//find average step
 		float avgkfn = (root->animation[0]->keyframes.size() + root->animation[1]->keyframes.size()) / 2;
@@ -581,10 +586,7 @@ public:
 				myplayer.lr += decay_step;
 			}
 		}
-<<<<<<< HEAD
->>>>>>> 3b481b8d4bc89117c61feea59bbdf2d22bde9759
-       
-=======
+
 		//loop animation
 		if ( myplayer.ff )
 			frametime *= 2;
@@ -595,9 +597,32 @@ public:
 		root->play_animation(&fframe, 0, 1, myplayer.state);
 
 		//rotate player
-		glm::mat4 player_rotate = glm::rotate(glm::mat4(1), myplayer.lr, glm::vec3(0, 1, 0));
->>>>>>> 7e10af6e3cc6dd508d09b48483ff6c368d802de5
-		
+        glm::mat4 player_rotate = glm::rotate(glm::mat4(1), -myplayer.lr, glm::vec3(0, 1, 0));
+        
+        
+        
+        
+        
+        static float lateral_trans = 0.0;
+        static float progressive_trans = 0;
+        static int highscore = 0.0;
+        
+        highscore = (int)(progressive_trans * -100);
+        
+        cout << highscore << endl;
+
+        if(myplayer.lr > 0.0) {
+            lateral_trans += .2;
+        }
+        else if(myplayer.lr < 0.0) {
+            
+            lateral_trans -= .2;
+        }
+        else {
+            progressive_trans -= .05;
+        }
+        
+        
         //====================================================================================================
         // Setup Matrices
         //====================================================================================================
@@ -606,9 +631,10 @@ public:
         V = mycam.process(frametime);
         M = glm::mat4(1);
         
-        glm::mat4 TransZ = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -8));
+        glm::mat4 TransZ = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -8 + progressive_trans));
+        glm::mat4 TransX = glm::translate(glm::mat4(1.0f), glm::vec3(lateral_trans, 0.0f, 0.0f));
         glm::mat4 S = glm::scale(glm::mat4(1.0f), glm::vec3(0.01f, 0.01f, 0.01f));
-        M =  TransZ * player_rotate * S;
+        M =  TransZ * TransX * player_rotate * S;
         
 
         
