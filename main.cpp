@@ -17,10 +17,13 @@ based on CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 #include "bone.h"
 #include "controller.h"
 #define ANIMATION_COUNT 2
-#define IDLE 0
-#define STEP 1
 #define ROT_MAX 1.570796
 #define ROT_TIME .005;
+#define EMITTER_DISTANCE 100
+#define EMITTER_OFFSET 20
+#define EMITTER_HEIGHT 2
+#define BULLET_SPEED 15
+#define SEEKER_PROB 3
 using namespace std;
 using namespace glm;
 shared_ptr<Shape> shape;
@@ -163,9 +166,17 @@ class bullet
 {
 public:
 	glm::vec3 pos, v;
-	bullet() {
-		pos = vec3(0, 3, -100);
-		v = vec3((rand() % 4) -2, (rand() % 4) - 2, 12);
+	int type;
+	bullet(vec3 ppos) {
+		type = rand() % SEEKER_PROB;
+		pos = vec3(EMITTER_OFFSET * (rand() % 3) - EMITTER_OFFSET, EMITTER_HEIGHT, ppos.z - EMITTER_DISTANCE);
+		if (type  != 0) {
+			v = vec3(0, 0, BULLET_SPEED);
+		}
+		else {
+			v = ppos - pos;
+			v.z = BULLET_SPEED;
+		}
 	}
 	void process(double ftime){
 		pos += v * (float)ftime;
@@ -339,8 +350,8 @@ public:
 		glGenVertexArrays(1, &VertexArrayID);
 		glBindVertexArray(VertexArrayID);
 		/*aniamtion IDLE*/
-		glGenBuffers(1, &VertexBufferID[IDLE]);
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID[IDLE]);
+		glGenBuffers(1, &VertexBufferID[0]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID[0]);
 		vector<vec3> posIDLE;
 		vector<unsigned int> imatIDLE;
 		root->write_to_VBOs(vec3(0, 0, 0), posIDLE, imatIDLE);
@@ -363,8 +374,8 @@ public:
 		// Allocate Space for Animations
 		//====================================================================================================
 		/*animation idle*/
-		glGenBuffers(1, &VertexBufferIDimat[IDLE]);
-		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat[IDLE]);
+		glGenBuffers(1, &VertexBufferIDimat[0]);
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat[0]);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imatIDLE.size(), imatIDLE.data(), GL_DYNAMIC_DRAW);
 		glEnableVertexAttribArray(1);
 		glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, 0, (void*)0);
@@ -410,6 +421,7 @@ public:
 		bulletsh->addUniform("P");
 		bulletsh->addUniform("V");
 		bulletsh->addUniform("M");
+		bulletsh->addUniform("type");
 		bulletsh->addUniform("campos");
 		bulletsh->addAttribute("vertPos");
 		bulletsh->addAttribute("vertNor");
@@ -490,7 +502,7 @@ public:
 		if (totaltime_ms / 10000 * 8 > ticks) {
 			cout << to_string(totaltime_ms / 1000) << " " << to_string(ticks) << endl;
 			ticks++;
-			bullet x;
+			bullet x(myplayer.pos);
 			bullets.push_back(x);
 		}
 		/*process bullet*/
@@ -598,6 +610,7 @@ public:
 			glUniformMatrix4fv(bulletsh->getUniform("P"), 1, GL_FALSE, &P[0][0]);
 			glUniformMatrix4fv(bulletsh->getUniform("V"), 1, GL_FALSE, &V[0][0]);
 			glUniformMatrix4fv(bulletsh->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+			glUniform1i(bulletsh->getUniform("type"),bullets.at(bi).type);
 			glUniform3fv(bulletsh->getUniform("campos"), 1, &mycam.pos[0]);
 			bulletG->draw(bulletsh, false);			//render!!!!!!!
 		}
