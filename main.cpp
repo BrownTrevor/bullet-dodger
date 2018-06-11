@@ -10,12 +10,13 @@ based on CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 #include "GLSL.h"
 #include "Program.h"
 #include "MatrixStack.h"
-
+#include "controller.h"
 #include "WindowManager.h"
 #include "Shape.h"
+#include <algorithm>
 #include "line.h"
 #include "bone.h"
-#define ANIMATION_COUNT 2
+#define GEOM_COUNT 2
 #define ROT_MAX 1.570796
 #define ROT_TIME .005;
 #define EMITTER_DISTANCE 100
@@ -23,6 +24,10 @@ based on CPE/CSC 471 Lab base code Wood/Dunn/Eckhardt
 #define EMITTER_HEIGHT 2
 #define BULLET_SPEED 15
 #define SEEKER_PROB 3
+#define GRAVITY_C -5
+#define PARTICLE_SPEED 1
+#define PARTICLE_SPREAD 2
+#define PARTICLE_NUM 10;
 using namespace std;
 using namespace glm;
 shared_ptr<Shape> shape;
@@ -163,6 +168,25 @@ public:
 		left, right,state,ff,rr = 0;
 	}
 };
+class particle
+{
+public:
+	vec3 pos, v;
+	particle(vec3 pos_init) {
+		pos = pos_init;
+		v = vec3(get_rand_f(), get_rand_f(), get_rand_f());
+	}
+	void process(double ftime) {
+		v.y += GRAVITY_C * ftime;
+		pos += v * (float)ftime;
+	}
+private:
+	float get_rand_f() {
+		float num = PARTICLE_SPREAD * ((float)rand() / RAND_MAX * 2 - 1);
+		return num;
+	}
+};
+
 class bullet
 {
 public:
@@ -206,11 +230,11 @@ public:
     WindowManager *windowManager = nullptr;
     
     // Our shader program
-    std::shared_ptr<Program> shape, prog, bulletsh;
+    std::shared_ptr<Program> shape, prog, particlesh, bulletsh;
     
-    GLuint VertexArrayID;
-	GLuint VertexBufferID[ANIMATION_COUNT];
-	GLuint VertexBufferIDimat[ANIMATION_COUNT];
+    GLuint VertexArrayID[GEOM_COUNT];
+	GLuint VertexBufferID[GEOM_COUNT];
+	GLuint VertexBufferIDimat[GEOM_COUNT];
     GLuint VertexNormDBox, VertexTexBox, IndexBufferIDBox;
     GLuint SkyTex;
     
@@ -231,8 +255,14 @@ public:
 	//bullet vector
 	vector<bullet> bullets;
 
+	//particle vector
+	vector<particle> particles;
+
 	//controller global
-	//CXBOXController *gamepad = new CXBOXController(1);
+	CXBOXController *gamepad = new CXBOXController(1);
+
+	//texture data
+	GLuint Texture;
 
 	void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
 	{
@@ -368,16 +398,18 @@ public:
 		bulletG->resize();
 		bulletG->init();
 
+		//====================================================================================================
+		// Load Animations
+		//===================================================================================================
+
 		for (int ii = 0; ii < 200; ii++)
 			animmat[ii] = mat4(1);
 		readtobone(resourceDirectory + "/walk.FBX", &all_animation, &root, 1);
 		readtobone(resourceDirectory + "/run.FBX", &all_animation, &root, 0);
 		root->set_animations(&all_animation, animmat, animmatsize);
 
-	
-
-		glGenVertexArrays(1, &VertexArrayID);
-		glBindVertexArray(VertexArrayID);
+		glGenVertexArrays(1, &VertexArrayID[0]);
+		glBindVertexArray(VertexArrayID[0]);
 		/*aniamtion IDLE*/
 		glGenBuffers(1, &VertexBufferID[0]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID[0]);
@@ -385,10 +417,6 @@ public:
 		vector<unsigned int> imatIDLE;
 		root->write_to_VBOs(vec3(0, 0, 0), posIDLE, imatIDLE);
 		size_stick = posIDLE.size();
-
-		
-		
-		
 
 		//====================================================================================================
 		// Allocate Space for Bones
@@ -402,7 +430,6 @@ public:
 		//====================================================================================================
 		// Allocate Space for Animations
 		//====================================================================================================
-		/*animation idle*/
 		glGenBuffers(1, &VertexBufferIDimat[0]);
 		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferIDimat[0]);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(uint)*imatIDLE.size(), imatIDLE.data(), GL_DYNAMIC_DRAW);
@@ -411,7 +438,109 @@ public:
 
 
 		glBindVertexArray(0);
-		glUseProgram(prog->pid);
+		//glUseProgram(prog->pid);
+
+		
+
+		//====================================================================================================
+		// Create Geometry for Particle 
+		//===================================================================================================
+
+		//generate the VAO
+		glGenVertexArrays(1, &VertexArrayID[1]);
+		glBindVertexArray(VertexArrayID[1]);
+		
+		glGenBuffers(1, &VertexBufferID[1]);
+		//set the current state to focus on our vertex buffer
+		glBindBuffer(GL_ARRAY_BUFFER, VertexBufferID[1]);
+
+		GLfloat cube_vertices[] = {
+			// front
+			-1.0, -1.0,  1.0,//LD
+			1.0, -1.0,  1.0,//RD
+			1.0,  1.0,  1.0,//RU
+			-1.0,  1.0,  1.0,//LU
+		};
+		//make it a bit smaller
+		for (int i = 0; i < 12; i++)
+			cube_vertices[i] *= 0.5;
+		//actually memcopy the data - only do this once
+		glBufferData(GL_ARRAY_BUFFER, sizeof(cube_vertices), cube_vertices, GL_DYNAMIC_DRAW);
+
+		//we need to set up the vertex array
+		glEnableVertexAttribArray(0);
+		//key function to get up how many elements to pull out at a time (3)
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+		//color
+		GLfloat cube_norm[] = {
+			// front colors
+			0.0, 0.0, 1.0,
+			0.0, 0.0, 1.0,
+			0.0, 0.0, 1.0,
+			0.0, 0.0, 1.0,
+
+		};
+		glGenBuffers(1, &VertexNormDBox);
+		//set the current state to focus on our vertex buffer
+		glBindBuffer(GL_ARRAY_BUFFER, VertexNormDBox);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(cube_norm), cube_norm, GL_STATIC_DRAW);
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+		//color
+		glm::vec2 cube_tex[] = {
+			// front colors
+			glm::vec2(0.0, 1.0),
+			glm::vec2(1.0, 1.0),
+			glm::vec2(1.0, 0.0),
+			glm::vec2(0.0, 0.0),
+
+		};
+		glGenBuffers(1, &VertexTexBox);
+		//set the current state to focus on our vertex buffer
+		glBindBuffer(GL_ARRAY_BUFFER, VertexTexBox);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(cube_tex), cube_tex, GL_STATIC_DRAW);
+		glEnableVertexAttribArray(2);
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+		glGenBuffers(1, &IndexBufferIDBox);
+		//set the current state to focus on our vertex buffer
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBufferIDBox);
+		GLushort cube_elements[] = {
+
+			// front
+			0, 1, 2,
+			2, 3, 0,
+		};
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cube_elements), cube_elements, GL_STATIC_DRAW);
+
+		glBindVertexArray(0);
+
+		//====================================================================================================
+		// Bind Texture for Particle 
+		//===================================================================================================
+
+		int width, height, channels;
+		char filepath[1000];
+
+		//texture 1
+		string str = resourceDirectory + "/Blue_Giant.jpg";
+		strcpy(filepath, str.c_str());
+		unsigned char* data = stbi_load(filepath, &width, &height, &channels, 4);
+		glGenTextures(1, &Texture);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, Texture);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		GLuint Tex1Location = glGetUniformLocation(particlesh->pid, "tex");//tex, tex2... sampler in the fragment shader
+		// Then bind the uniform samplers to texture units:
+		glUseProgram(particlesh->pid);
+		glUniform1i(Tex1Location, 0);
 	}
 
 	//General OGL initialization - set OGL state here
@@ -456,6 +585,21 @@ public:
 		bulletsh->addAttribute("vertNor");
 		bulletsh->addAttribute("vertTex");
 
+		particlesh = std::make_shared<Program>();
+		particlesh->setVerbose(true);
+		particlesh->setShaderNames(resourceDirectory + "/shader_vertex_particle.glsl", resourceDirectory + "/shader_fragment_particle.glsl");
+		if (!particlesh->init())
+		{
+			std::cerr << "One or more shaders failed to compile... exiting!" << std::endl;
+			exit(1);
+		}
+		particlesh->addUniform("P");
+		particlesh->addUniform("V");
+		particlesh->addUniform("M");
+		particlesh->addUniform("campos");
+		particlesh->addAttribute("vertPos");
+		particlesh->addAttribute("vertNor");
+		particlesh->addAttribute("vertTex");
 	}
 
     glm::mat4 getPerspectiveMatrix() {
@@ -464,6 +608,18 @@ public:
         return glm::perspective(fov, aspect, 0.01f, 10000.0f);
     }
 	
+	struct mysortfunction
+	{
+		inline bool operator() (particle& p1, particle& p2) {
+			vec3 v1 = p1.pos;
+			vec3 v2 = p2.pos;
+			float l1 = sqrtf(std::pow(v1.x + mycam.pos.x, 2) + std::pow(v1.y + mycam.pos.y, 2) + std::pow(v1.z + mycam.pos.z, 2));
+			float l2 = sqrtf(std::pow(v2.x + mycam.pos.x, 2) + std::pow(v2.y + mycam.pos.y, 2) + std::pow(v2.z + mycam.pos.z, 2));
+			return l1 > l2;
+		}
+	};
+
+
 	void render()
 	{
 
@@ -475,7 +631,7 @@ public:
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glClearColor(0.3f, 0.7f, 0.8f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+       // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         
         
         //====================================================================================================
@@ -491,21 +647,20 @@ public:
 		//====================================================================================================
 		// Game Pad
 		//====================================================================================================
-        /*
 		if (gamepad->IsConnected())
 		{
 
 			//	BUTTON PRESS
 			if (gamepad->GetState().Gamepad.wButtons & XINPUT_GAMEPAD_Y)
-				mycam.w = 1;
+				myplayer.left = 1;
 			else
-				mycam.w = 0;
+				myplayer.left = 0;
 			if (gamepad->GetState().Gamepad.wButtons & XINPUT_GAMEPAD_A)
 			{
-				mycam.s = 1;
+				myplayer.right = 1;
 			}
 			else
-				mycam.s = 0;
+				myplayer.right = 0;
 
 		}
 		// ANALOG STICKS
@@ -525,7 +680,7 @@ public:
 			mycam.rot.y -= angle_y;
 		}
 
-         */
+     
         
         
 		
@@ -543,10 +698,23 @@ public:
 		/*process bullet*/
 		for (int bi = 0; bi < bullets.size(); bi++) {
 			bullets.at(bi).process(frametime);
-			if (bullets.at(bi).pos.z > 0) {
+			if (bullets.at(bi).pos.z > -10) {
+				for (int j = 0; j < 10; j++) {
+					particle x = particle(bullets.at(bi).pos);
+					particles.push_back(x);
+				}
 				bullets.erase(bullets.begin() + bi);
 			}
 		}
+
+		/* process particles */
+		for (int i = 0; i < particles.size(); i++) {
+			particles.at(i).process(frametime);
+			if (particles.at(i).pos.y < 0) {
+				particles.erase(particles.begin() + i);
+			}
+		}
+
 
         //animation frame system
         int anim_step_width_ms = 8490 / 204;
@@ -557,7 +725,6 @@ public:
             frame++;
         }
         
-		/*idle animation*/
 		for (int ii = 0; ii < 200; ii++)
 			animmat[ii] = mat4(1);
 		
@@ -612,9 +779,6 @@ public:
         glm::mat4 player_rotate = glm::rotate(glm::mat4(1), -myplayer.lr, glm::vec3(0, 1, 0));
         
         
-        
-        
-        
         static float lateral_trans = 0.0;
         static float progressive_trans = 0;
         static int highscore = 0.0;
@@ -654,7 +818,7 @@ public:
         // Send to Shaders and draw Animation
         //====================================================================================================
         
-		glBindVertexArray(VertexArrayID);
+		glBindVertexArray(VertexArrayID[0]);
         prog->bind();
         glUniformMatrix4fv(prog->getUniform("P"), 1, GL_FALSE, &P[0][0]);
         glUniformMatrix4fv(prog->getUniform("V"), 1, GL_FALSE, &V[0][0]);
@@ -680,8 +844,53 @@ public:
 			bulletG->draw(bulletsh, false);			//render!!!!!!!
 		}
 		bulletsh->unbind();
-    
+		
+		//====================================================================================================
+		// Send to Shaders and draw Particles 
+		//====================================================================================================
+		particlesh->bind();
 
+
+		//send the matrices to the shaders
+		glUniformMatrix4fv(particlesh->getUniform("P"), 1, GL_FALSE, &P[0][0]);
+		glUniformMatrix4fv(particlesh->getUniform("V"), 1, GL_FALSE, &V[0][0]);
+		glUniformMatrix4fv(particlesh->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+		glUniform3fv(particlesh->getUniform("campos"), 1, &mycam.pos[0]);
+
+
+
+		glBindVertexArray(VertexArrayID[1]);
+		//actually draw from vertex 0, 3 vertices
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBufferIDBox);
+		//glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, (void*)0);
+		mat4 Vi = glm::transpose(V);
+		Vi[0][3] = 0;
+		Vi[1][3] = 0;
+		Vi[2][3] = 0;
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, Texture);
+
+		//sort
+		if (particles.size() > 0) {
+			std::sort(particles.begin(), particles.end(), mysortfunction());
+		}
+		//draw
+		for (int i = 0; i < particles.size(); i++)
+		{
+			glm::mat4 TransZ = glm::translate(glm::mat4(1.0f), particles.at(i).pos);
+			//TransZ = glm::translate(glm::mat4(1.0f), vec3(0,0,-5));
+			M = TransZ * Vi;
+
+
+			glUniformMatrix4fv(particlesh->getUniform("M"), 1, GL_FALSE, &M[0][0]);
+
+			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, (void*)0);
+
+		}
+		glBindVertexArray(0);
+
+
+		particlesh->unbind();
 	}
 
 };
